@@ -1,0 +1,71 @@
+---
+title: "Proofs on Sui"
+description: "Anchoring an answer as a tamper-evident, wallet-signed Receipt object that the chain itself verifies."
+---
+
+A receipt rendered in the app is useful — but a skeptic can say _"you computed it, you stored it, you declared it authorized."_ Cairn closes that gap by moving the proof **on-chain**.
+
+## What anchoring does
+
+When you anchor an answer, Cairn:
+
+<Steps>
+  <Step title="Stores the receipt to Walrus">
+    The canonical receipt JSON becomes a real Walrus blob (`POST /api/anchor` returns the `blobId` and a `digestHex`).
+  </Step>
+  <Step title="Mints a Receipt object on Sui">
+    A wallet-signed transaction calls `anchor_receipt(...)`, which creates an owned `Receipt` object and links it into a per-policy hash chain.
+  </Step>
+  <Step title="Recomputes the verdict on-chain">
+    The contract re-checks `is_allowed` for every used namespace and sets `all_authorized` itself — the app cannot lie about it.
+  </Step>
+</Steps>
+
+## Why an object, not just an event
+
+The earlier design merely emitted an event. A persistent `Receipt` **object** is stronger:
+
+<CardGroup cols={2}>
+  <Card title="Fetchable" icon="magnifying-glass">
+    Anyone can `getObject(id)` and read the proof directly — no log scraping.
+  </Card>
+  <Card title="Ownable" icon="key">
+    The Proof is transferred to the signer. It's an asset you hold, with `Display` metadata so explorers render it as a "Cairn Proof".
+  </Card>
+  <Card title="Tamper-evident" icon="link">
+    Each receipt links to the previous via a blake2b256 hash chain — you can't quietly delete or reorder a bad answer.
+  </Card>
+  <Card title="Independently verifiable" icon="shield-check">
+    The verdict is the chain's, recomputed against the live policy — not the app's claim.
+  </Card>
+</CardGroup>
+
+## The Receipt object
+
+```move
+public struct Receipt has key, store {
+    id: UID,
+    policy: ID,
+    seq: u64,
+    answer_id: String,
+    agent: String,
+    used_namespaces: vector<String>,
+    blocked_namespaces: vector<String>,
+    all_authorized: bool,
+    digest: vector<u8>,       // blake2b256 of the Walrus receipt blob (content binding)
+    prev_digest: vector<u8>,  // chain head before this receipt
+    chain_digest: vector<u8>, // blake2b256(prev_digest ++ digest)
+    walrus_blob: String,
+    timestamp_ms: u64,
+}
+```
+
+## Three things a proof binds together
+
+A Cairn Proof is only meaningful because it ties three independent systems together:
+
+1. **Content** — `digest` is the hash of the exact Walrus blob, so the Proof points to specific memory/answer content.
+2. **Order** — `chain_digest` links each receipt to its predecessor, making the history tamper-evident.
+3. **Authority** — `all_authorized` is recomputed on-chain from the live policy.
+
+Anyone can check all three with **no wallet**. See [The verifier](/onchain/verifier) and [The hash chain](/onchain/hash-chain).

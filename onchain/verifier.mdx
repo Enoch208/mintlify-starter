@@ -1,0 +1,77 @@
+---
+title: "The public verifier"
+description: "A walletless page anyone can use to independently verify a Cairn Proof against Sui and Walrus."
+---
+
+The verifier is Cairn's closing argument: **don't trust Cairn — verify it.** Open `/verify/<receiptId>` with no wallet, and the page independently re-derives every claim a proof makes.
+
+<Card title="Try it" icon="shield-check" href="https://cairn-livid-eight.vercel.app">
+  Open the live app, anchor an answer, and follow the "verify" link.
+</Card>
+
+## The three checks
+
+For a given `Receipt` object id, the verifier reads it from Sui and runs three independent checks:
+
+<Steps>
+  <Step title="Hash chain intact">
+    Recompute `blake2b256(prev_digest ++ digest)` from the object's own fields and confirm it equals the stored `chain_digest`. A reordered or deleted receipt breaks this.
+  </Step>
+  <Step title="Content binding (Walrus ↔ chain)">
+    Fetch the Walrus blob named by `walrus_blob`, re-canonicalize and hash it, and confirm it equals the on-chain `digest`. This proves the proof points to exactly this content.
+  </Step>
+  <Step title="Authorization recomputed">
+    Call `is_allowed` for every used namespace against the **live** policy and confirm the result matches the receipt's `all_authorized`. This proves the verdict, recomputed now, still holds.
+  </Step>
+</Steps>
+
+## The verification logic
+
+```ts
+// apps/web/lib/verify.ts (simplified)
+export async function verifyReceipt(id) {
+  const receipt = await getReceipt(id);
+  if (!receipt) return { found: false, checks: [], receipt: null };
+
+  const checks = [];
+
+  // 1. chain link
+  checks.push({ label: "Hash chain intact",
+    ok: chainOk(receipt.prevDigestHex, receipt.digestHex, receipt.chainDigestHex) });
+
+  // 2. content binding — re-canonicalize the blob, then hash
+  const res = await fetch(`${AGGREGATOR}/v1/blobs/${receipt.walrusBlob}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  checks.push({ label: "Content binding (Walrus <-> chain)",
+    ok: digestMatches(bytes, receipt.digestHex) });
+
+  // 3. authorization, recomputed against the live on-chain policy
+  const verdicts = await Promise.all(
+    receipt.usedNamespaces.map((ns) => readIsAllowed(receipt.agent, ns, receipt.policy)));
+  checks.push({ label: "Authorization recomputed",
+    ok: verdicts.every(Boolean) === receipt.allAuthorized });
+
+  return { found: true, checks, receipt };
+}
+```
+
+## Why it's robust
+
+```ts
+export function digestMatches(blobBytes, expectedDigestHex) {
+  try {
+    const obj = JSON.parse(new TextDecoder().decode(blobBytes));
+    return digestHex(canonicalReceiptBytes(obj)) === expectedDigestHex;
+  } catch { return false; }
+}
+```
+
+The content check **re-canonicalizes** the fetched blob before hashing — so it doesn't matter how Walrus serialized the JSON (key order, whitespace). The proof binds the canonical content.
+
+<Note>
+The verifier is entirely read-only: `getObject` + `is_allowed` via `devInspect` + a Walrus aggregator `GET`. No wallet, no Cairn-internal state, no trust in the app required.
+</Note>
+
+## What a failure looks like
+
+If someone tampers with the stored blob, the content check goes red. If the on-chain policy has since revoked a namespace the receipt used, the authorization check goes red. If the receipt were reordered in the chain, the chain check goes red. Honest proofs are all-green; tampered ones can't hide.

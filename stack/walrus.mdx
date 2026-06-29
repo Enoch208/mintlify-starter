@@ -1,0 +1,58 @@
+---
+title: "Walrus"
+description: "How Cairn stores memories and receipts as real, content-addressed blobs on Walrus — and verifies them live."
+---
+
+[Walrus](https://www.walrus.xyz) is Cairn's storage layer. Every memory and every anchored receipt is a real, content-addressed blob — not a hash placeholder — so anyone can resolve it and confirm it exists.
+
+## How Cairn talks to Walrus
+
+Cairn uses the Walrus HTTP API directly through a small client:
+
+```ts
+// packages/cairn-walrus/src/walrus-http.ts
+export class WalrusHttp implements WalrusClient {
+  async store(data, epochs = 5) {
+    const res = await fetch(`${this.publisher}/v1/blobs?epochs=${epochs}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    const blobId = json.newlyCreated?.blobObject?.blobId ?? json.alreadyCertified?.blobId;
+    return { blobId };
+  }
+
+  async verify(blobId) {
+    const res = await fetch(`${this.aggregator}/v1/blobs/${blobId}`);
+    return res.ok; // resolves on-chain? not a flag we set
+  }
+}
+```
+
+- **Store** — `PUT /v1/blobs?epochs=N` on the publisher returns the real blob id, which becomes the memory's `walrusRef`.
+- **Verify** — `GET /v1/blobs/{id}` on the aggregator. The receipt's "verified" badge is an independent aggregator GET _anyone_ can repeat.
+
+## Public verifiability
+
+Captured memories become **public Walrus blobs** by default — and that's deliberate. It means a receipt's "verified" badge isn't a label Cairn controls; it's a check anyone can reproduce against any testnet aggregator. That public verifiability is the strongest version of the proof story.
+
+```bash
+# resolve any Cairn memory or receipt blob yourself
+curl https://aggregator.walrus-testnet.walrus.space/v1/blobs/<blobId>
+```
+
+## Configuration
+
+```bash
+WALRUS_PUBLISHER=https://publisher.walrus-testnet.walrus.space
+WALRUS_AGGREGATOR=https://aggregator.walrus-testnet.walrus.space
+```
+
+<Tip>
+Set `CAIRN_MODE=mock` (or omit the Walrus URLs) to use a deterministic in-memory `MockWalrus` — handy for offline development and tests.
+</Tip>
+
+## Receipts on Walrus
+
+When an answer is anchored, the canonical receipt JSON is stored to Walrus first; its blob id and `blake2b256` digest are then recorded on-chain in the `Receipt` object. The verifier later re-fetches that blob and re-derives the digest — closing the loop between storage and proof. See [The hash chain](/onchain/hash-chain).

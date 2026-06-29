@@ -1,0 +1,69 @@
+---
+title: "Answer Receipts"
+description: "Every memory-based answer ships a verifiable receipt: what it used, whether it was authorized, and whether the blob still resolves."
+---
+
+An **Answer Receipt** is the product surface of Cairn — the thing rendered under every answer that turns "the agent remembered" into something you can inspect.
+
+## The contract
+
+```ts
+type UsedMemory = {
+  memoryId: string;
+  namespace: NamespaceId;
+  snippet: string;
+  sourceAgent: AgentId;
+  walrusRef: string;
+  authorized: boolean; // allowed by policy at retrieval
+  verified: boolean;   // blob genuinely resolves on Walrus (a live check)
+};
+
+type AnswerReceipt = {
+  answerId: string;
+  agentId: AgentId;
+  usedMemories: UsedMemory[];
+  blockedNamespaces: NamespaceId[];
+  createdAt: string;
+};
+```
+
+## What each field proves
+
+<CardGroup cols={2}>
+  <Card title="usedMemories" icon="list-check">
+    The exact facts the answer drew on — each with its namespace, source agent, and real `walrusRef`.
+  </Card>
+  <Card title="authorized" icon="user-check">
+    The memory was allowed by the policy at retrieval. Because the gate runs first, an unauthorized memory could never appear here.
+  </Card>
+  <Card title="verified" icon="badge-check">
+    A live `GET /v1/blobs/{id}` against the Walrus aggregator confirmed the blob resolves — not a flag the app sets.
+  </Card>
+  <Card title="blockedNamespaces" icon="ban">
+    Namespaces that matched the query but were denied — the proof of what the agent was _not_ allowed to use.
+  </Card>
+</CardGroup>
+
+## How it's built
+
+```ts
+// packages/cairn-core/src/receipt.ts
+export function buildReceipt({ agentId, answerId, used, blockedNamespaces, verifiedRefs, createdAt }) {
+  return {
+    answerId, agentId,
+    usedMemories: used.map((m) => ({
+      memoryId: m.memoryId, namespace: m.namespace, snippet: m.content,
+      sourceAgent: m.sourceAgent, walrusRef: m.walrusRef,
+      authorized: true,                          // only allowed memory reaches here
+      verified: verifiedRefs.has(m.walrusRef),   // live Walrus check
+    })),
+    blockedNamespaces, createdAt,
+  };
+}
+```
+
+The receipt is honest **by construction**: `authorized` is always true for entries in `usedMemories` precisely because the gate already removed anything unauthorized — and `verified` reflects a real network check, not an assertion.
+
+## From receipt to permanent proof
+
+A receipt lives in the app as JSON. But any receipt can be promoted to a tamper-evident, on-chain **Proof** object: it's stored to Walrus, hashed, and anchored on Sui where the chain recomputes the authorization verdict. See [Proofs on Sui](/concepts/proofs-on-sui).

@@ -1,0 +1,72 @@
+---
+title: "Deployments"
+description: "Live Cairn package and object IDs on Sui testnet, and how to publish your own."
+---
+
+Cairn's `cairn::access` module is live on **Sui testnet**. The app reads these IDs from `deployments/testnet.json`, so the verifier works out of the box.
+
+## Testnet (live)
+
+<CardGroup cols={1}>
+  <Card title="Package ID" icon="cube">
+    `0x65cb384ad13ec9f4eadaa055c462a72f78b7b968265075879873a3f1be444a4a`
+  </Card>
+</CardGroup>
+
+| Object | ID |
+| --- | --- |
+| **Package** | `0x65cb384ad13ec9f4eadaa055c462a72f78b7b968265075879873a3f1be444a4a` |
+| **AccessPolicy** (shared) | `0x527dd10ef47b4900968334b7b3803b2cd4837c99e70d04d19b2b9e36f24109a7` |
+| **OwnerCap** (owned) | `0x586f1758439ff19ba007bdbb3a4767cb204e6ca7e426f7a6a8f93c5e44dfdc72` |
+| **Example Receipt** (demo) | `0x00c262d84d2c8ed5b1f4bd706939765bd81d88b06c3d84adcddfae44c90dc850` |
+
+<Card title="View the example proof" icon="shield-check" href="https://cairn-livid-eight.vercel.app/verify/0x00c262d84d2c8ed5b1f4bd706939765bd81d88b06c3d84adcddfae44c90dc850">
+  Open the walletless verifier for the demo Receipt — all three checks green.
+</Card>
+
+## Configuration
+
+The app resolves on-chain identifiers from public env with a fallback to the committed deployment:
+
+```ts
+// apps/web/lib/cairn-config.ts
+export const CAIRN = {
+  network: process.env.NEXT_PUBLIC_CAIRN_NETWORK ?? "testnet",
+  packageId: process.env.NEXT_PUBLIC_CAIRN_PACKAGE_ID ?? deployment.packageId,
+  module: "access",
+  policyId: process.env.NEXT_PUBLIC_CAIRN_POLICY_ID ?? deployment.accessPolicy,
+  clockId: "0x6", // shared Clock, fixed on every Sui network
+};
+```
+
+## Publish your own
+
+<Steps>
+  <Step title="Switch to testnet and fund gas">
+    ```bash
+    sui client switch --env testnet
+    sui client active-address
+    sui client gas   # need ~0.2 SUI; faucet at https://faucet.sui.io
+    ```
+  </Step>
+  <Step title="Publish">
+    ```bash
+    cd contracts
+    sui client publish --gas-budget 200000000 --json > publish.json
+    ```
+    Grab the new `packageId` from the published `objectChanges`.
+  </Step>
+  <Step title="Create your policy">
+    `publish` doesn't call `create()`, so make your shared `AccessPolicy` + `OwnerCap`:
+    ```bash
+    sui client call --package <packageId> --module access --function create --gas-budget 50000000
+    ```
+  </Step>
+  <Step title="Update deployments/testnet.json">
+    Set `packageId`, `accessPolicy`, `ownerCap`, and `owner` to the new values — the app picks them up automatically.
+  </Step>
+</Steps>
+
+<Warning>
+The Cairn contract changes (new `Receipt` object, new `anchor_receipt` signature) are **breaking**, so a fresh `publish` — not an in-place `upgrade` — is required.
+</Warning>

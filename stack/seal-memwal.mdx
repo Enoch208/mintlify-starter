@@ -1,0 +1,51 @@
+---
+title: "Seal & MemWal"
+description: "Optional server-side encryption: private memories addressed by a real Walrus blob, readable only through the relayer."
+---
+
+By default, Cairn stores memories as public Walrus blobs (maximizing verifiability). For **private** memory, Cairn integrates [Seal](https://github.com/MystenLabs/seal) encryption through [MemWal](https://github.com/MystenLabs/MemWal) — without hand-rolling any crypto.
+
+## What MemWal mode changes
+
+<CardGroup cols={2}>
+  <Card title="Default mode" icon="globe">
+    Memories are public Walrus blobs. Anyone can resolve them — strongest public verifiability.
+  </Card>
+  <Card title="MemWal mode" icon="lock">
+    Memories are Seal-encrypted server-side before they land on Walrus — addressed by a real blob, readable only through the relayer with the delegate key.
+  </Card>
+</CardGroup>
+
+## How it's wired
+
+In MemWal mode, captures route through the MemWal SDK instead of the direct Walrus client:
+
+```ts
+// apps/web/lib/store.ts (simplified)
+const walrusRef = memwalEnabled()
+  ? await rememberOnMemwal(content, namespace) // Seal-encrypt -> Walrus, via relayer
+  : (await walrus.store({ namespace, content, sourceAgent, createdAt }, MEMORY_EPOCHS)).blobId;
+```
+
+The MemWal relayer does the **Seal encryption, embedding, and Walrus storage server-side**, so memories become private — addressed by a real Walrus blob but readable only through the relayer with the delegate key. `remember(text, namespace)` returns a background job; Cairn waits for it and stores the returned blob id.
+
+## Enable it
+
+```bash
+CAIRN_MEMORY=memwal
+MEMWAL_ACCOUNT_ID=0x...
+MEMWAL_SERVER_URL=https://relayer.memory.walrus.xyz
+MEMWAL_PRIVATE_KEY=...
+```
+
+<Warning>
+`MEMWAL_PRIVATE_KEY` is a real secret — keep it in `.env.local` (gitignored) and never commit it.
+</Warning>
+
+## Proofs still work
+
+Anchored **receipts** are always stored as their own (public) Walrus blob regardless of memory mode, so the public verifier works whether or not memories themselves are encrypted. MemWal mode changes how the underlying _memory_ is stored; it doesn't weaken the proof of _what the agent used_.
+
+<Info>
+The full `remember → blob_id → recall` round-trip is validated live against the MemWal relayer in `apps/web/scripts/memwal-smoke.mjs`.
+</Info>

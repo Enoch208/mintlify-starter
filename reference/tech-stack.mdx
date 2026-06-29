@@ -1,0 +1,64 @@
+---
+title: "Tech stack"
+description: "The languages, frameworks, and packages that make up Cairn — and how the monorepo is laid out."
+---
+
+## Stack at a glance
+
+| Layer | Technology |
+| --- | --- |
+| **Smart contract** | Sui Move (`cairn::access`), testnet |
+| **Storage** | Walrus (HTTP API), Seal via MemWal (optional) |
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind |
+| **Wallet** | `@mysten/dapp-kit`, `@mysten/sui` v2.20 (`jsonRpc`), `@tanstack/react-query` |
+| **Crypto** | `@noble/hashes` blake2b256 (TS) ↔ `sui::hash::blake2b256` (Move) |
+| **LLMs** | OpenAI GPT-4o, Anthropic Claude (behind interfaces, mock fallback) |
+| **Agent interop** | Model Context Protocol server |
+| **Tests** | Vitest (TS), Sui Move unit tests |
+
+## Monorepo layout
+
+```
+cairn/
+├─ apps/
+│  └─ web/                 # Next.js app (chat, dashboard, access, /verify)
+│     ├─ app/              #   routes + /api handlers
+│     ├─ components/       #   UI (chat, receipts, access matrix, wallet)
+│     └─ lib/              #   sui.ts, digest.ts, verify.ts, store.ts, adapters
+├─ packages/
+│  ├─ cairn-core/          # framework-free: types, gate, policy, receipt (unit-tested)
+│  ├─ cairn-walrus/        # Walrus HTTP client + MockWalrus
+│  └─ cairn-mcp/           # Model Context Protocol server (5 tools)
+├─ contracts/              # Sui Move package (cairn::access) + tests
+└─ deployments/            # testnet.json (package + object IDs)
+```
+
+## Design principles
+
+<CardGroup cols={2}>
+  <Card title="Pure core" icon="cube">
+    `@cairn/core` holds the gate, policy, and receipt logic with zero framework deps — so the web app and the MCP server enforce identically.
+  </Card>
+  <Card title="Adapters behind interfaces" icon="plug">
+    LLM and Walrus clients sit behind interfaces with deterministic mock fallbacks — offline-friendly and test-friendly.
+  </Card>
+  <Card title="Typed boundaries" icon="shapes">
+    A few typed contracts (`Memory`, `Policy`, `AnswerReceipt`) define the seams; the rest composes.
+  </Card>
+  <Card title="On-chain source of truth" icon="link">
+    The policy and proof chain live on Sui; the app reads, it doesn't assert.
+  </Card>
+</CardGroup>
+
+## Local commands
+
+```bash
+npm run dev    # run the web app
+npm run build  # production build
+npm test       # all TS test suites (core, digest, verify, adapters)
+cd contracts && sui move test   # Move unit tests
+```
+
+<Card title="Source on GitHub" icon="github" href="https://github.com/Enoch208/cairn">
+  Enoch208/cairn — the full monorepo.
+</Card>

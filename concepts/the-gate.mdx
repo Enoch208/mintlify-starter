@@ -1,0 +1,70 @@
+---
+title: "The gate"
+description: "Access control enforced at retrieval — the model physically never sees memory it isn't allowed to use."
+---
+
+The **gate** is Cairn's core security primitive. It enforces an agent × namespace policy at _retrieval time_, before the model is ever called.
+
+## Gate before generation
+
+<Note>
+The single design rule: **gate before generation.** If access were checked _after_ retrieval (or after generation), a blocked memory would already be in the prompt — and "the agent shouldn't have used that" becomes an apology, not a guarantee.
+</Note>
+
+## The policy
+
+A `Policy` maps each agent and namespace to a boolean:
+
+```ts
+type Policy = Record<AgentId, Record<NamespaceId, boolean>>;
+```
+
+In-process (mock / fallback) the policy is default-deny with explicit grants. **On-chain**, the policy is default-allow with explicit revokes — `is_allowed` returns `true` unless a namespace was explicitly turned off for that agent. Either way, the gate consults a single source of truth before every recall.
+
+## How recall gates
+
+```ts
+// packages/cairn-core/src/gate.ts
+export function recall(agent, query, all, policy): RecallResult {
+  const relevant = all.filter((m) => matches(m.content, query));
+  const memories = relevant.filter((m) => isAllowed(agent, m.namespace, policy));
+  const blockedNamespaces = Array.from(new Set(
+    relevant.filter((m) => !isAllowed(agent, m.namespace, policy)).map((m) => m.namespace)
+  ));
+  return { memories, blockedNamespaces };
+}
+```
+
+The function returns two things:
+
+- `memories` — only the allowed, query-matching memories. These are the **only** memories passed to the LLM.
+- `blockedNamespaces` — namespaces that matched the query but were denied. These are surfaced on the receipt, never loaded into the prompt.
+
+This logic is pure, framework-free, and unit-tested.
+
+## Reading the policy from the chain
+
+When the request carries a `policyId`, the gate doesn't trust an in-process mirror — it reads the live on-chain policy:
+
+```ts
+// apps/web/lib/sui.ts (simplified)
+export async function readIsAllowed(agent, namespace, policyId) {
+  const tx = new Transaction();
+  tx.moveCall({ target: `${PKG}::access::is_allowed`,
+    arguments: [tx.object(policyId), tx.pure.string(agent), tx.pure.string(namespace)] });
+  const res = await suiClient.devInspectTransactionBlock({ transactionBlock: tx, sender: ZERO });
+  const ret = res.results?.[0]?.returnValues?.[0];
+  if (!ret) return false; // fail-closed: deny if the policy can't be read
+  return bcs.Bool.parse(Uint8Array.from(ret[0])) === true;
+}
+```
+
+<Warning>
+`readIsAllowed` **fails closed**: if the on-chain policy can't be read (RPC error), the namespace is treated as **not** allowed. For an access gate, denying on uncertainty is the safe default.
+</Warning>
+
+`devInspectTransactionBlock` is a read-only simulation — no gas, no signing — so the gate can consult the chain on every request cheaply.
+
+## Revocation is a real state change
+
+Revoking `agent-b × health` flips a boolean on the shared `AccessPolicy` object (a Sui transaction signed by the policy owner). The next recall reads the new state and returns zero memories for that namespace. There is no cache to invalidate and no prompt to scrub — the memory is simply never fetched.

@@ -1,20 +1,68 @@
 ---
-title: "Introduction"
-description: "Welcome to your project"
+title: "Cairn"
+description: "Proof-carrying memory for AI agents — control what every agent can use, and prove it on every answer."
 ---
 
-Write a short description of your product here. What it does, who it's for, and what they can accomplish with it.
+**Cairn is a memory layer for AI agents where every answer carries its proof.**
 
-<Tip>
-  Ready to make this your own? Start by editing this page. Update your `docs.json` file to customize your site. Then fill out the [Quickstart](/quickstart) page.
-</Tip>
+Most AI-memory projects answer one question: _can an agent remember across sessions?_ Cairn answers the harder one — **can you prove what an agent used to answer you, and stop it from touching memory it was never allowed to?**
 
-<Card title="Quickstart" icon="rocket" href="/quickstart">
-  This card links to the quickstart page in your project.
-</Card>
-<Card title="Components" icon="puzzle-piece" href="https://mintlify.com/docs/components">
-  Add cards, callouts, steps, tabs, and more to design and structure your pages.
-</Card>
-<Card title="Settings" icon="gear" href="https://mintlify.com/docs/organize/settings">
-  Set your site name, branding, and navigation in the `docs.json` file.
-</Card>
+Every memory-based answer renders a verifiable **Answer Receipt** — the memories it used, whether each was authorized, whether the blob still resolves on Walrus, and the namespaces it was blocked from. The access policy is enforced at _retrieval_, so the model **physically never sees** memory it isn't allowed to use. And each answer can be anchored on **Sui** as a tamper-evident **Proof** object that anyone can verify — with no wallet.
+
+<CardGroup cols={2}>
+  <Card title="Watch the demo" icon="play" href="https://cairn-livid-eight.vercel.app">
+    The real app driven live — GPT-4o + Claude, Walrus testnet, on-chain proof.
+  </Card>
+  <Card title="Run it locally" icon="rocket" href="/quickstart">
+    Zero to a running, live Cairn in a few minutes.
+  </Card>
+  <Card title="How it works" icon="diagram-project" href="/architecture">
+    The gate-before-generation architecture, end to end.
+  </Card>
+  <Card title="Verify a proof" icon="shield-check" href="/onchain/verifier">
+    The walletless public verifier — don't trust Cairn, verify it.
+  </Card>
+</CardGroup>
+
+## The problem
+
+AI agents are getting persistent memory, and that's the easy half. The hard half is **trust**. When an agent answers "from memory," you have no way to know _which_ memory it used, whether it was _allowed_ to use it, or whether that memory even exists where it claims. Memory is locked to one app or model, it doesn't travel when you switch providers, and "the agent remembered" is something you take on faith.
+
+That faith is the problem. An agent with access to a user's health, billing, and project memory — across multiple models — is one bad retrieval away from leaking something it should never have seen.
+
+## The design rule
+
+<Note>
+**Gate before generation.** The agent × namespace policy is enforced at _retrieval_ — the model only ever sees allowed memory — so the receipt under every answer is honest by construction, not a label slapped on after the fact.
+</Note>
+
+## What you get
+
+<CardGroup cols={2}>
+  <Card title="Cross-model memory" icon="arrows-left-right">
+    Teach with one model (GPT-4o), recall with another (Claude). The memory — and its proof — travel with the answer, not the vendor.
+  </Card>
+  <Card title="Verifiable receipts" icon="receipt">
+    Every answer ships an Answer Receipt: memories used, authorization, and a live Walrus blob check.
+  </Card>
+  <Card title="On-chain proofs" icon="cube">
+    Anchor any answer as a tamper-evident `Receipt` object on Sui — chained by blake2b256, ownable, permanent.
+  </Card>
+  <Card title="Works in any agent" icon="plug">
+    An MCP server gives Cursor, Claude Desktop, and Claude Code the same gated, receipted memory.
+  </Card>
+</CardGroup>
+
+## Built on the Sui Stack
+
+Cairn is built end-to-end on the Sui Stack — every capability is wired through the real platform, not faked.
+
+| Layer | Role |
+| --- | --- |
+| **Sui** | The access policy and a tamper-evident receipt chain live on-chain; the authorization verdict is computed by the chain. |
+| **Walrus** | Every memory is a real, content-addressed blob — publicly resolvable and independently verifiable. |
+| **Seal + MemWal** | Optional server-side encryption: memories become private, addressed by a real Walrus blob but readable only through the relayer. |
+
+<Info>
+Built for the **CLAY Hackathon** (Code Like a Yeti) on Sui Network.
+</Info>

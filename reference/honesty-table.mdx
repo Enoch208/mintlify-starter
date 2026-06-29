@@ -1,0 +1,40 @@
+---
+title: "What's real vs mock"
+description: "An honest accounting of which parts of Cairn are live and which fall back to deterministic mocks."
+---
+
+Cairn is **mock-first**: real adapters sit behind interfaces, and the system falls back to deterministic mocks when a key is absent — so it runs offline and a demo never hard-fails on a flaky testnet. Here's exactly what's real.
+
+| Capability | Status |
+| --- | --- |
+| **Cross-model recall** | Real. Agent A → OpenAI GPT-4o, Agent B → Anthropic Claude, behind a common interface. Falls back to a deterministic mock LLM when no API key is set. |
+| **Walrus storage** | Real. Memories and receipts are content-addressed blobs via the Walrus HTTP API. `MockWalrus` is used only in mock mode. |
+| **Walrus verification** | Real. The receipt's "verified" badge is a live aggregator `GET /v1/blobs/{id}` anyone can repeat — not a flag. |
+| **The gate** | Real and pure. Enforced at retrieval, before generation; unit-tested in `@cairn/core`. |
+| **On-chain policy** | Real. A shared `AccessPolicy` on Sui testnet; grants/revokes are real transactions; the gate reads it via `devInspect`. |
+| **Receipt anchoring** | Real. `anchor_receipt` mints a `Receipt` object, recomputes `all_authorized` on-chain, and extends a blake2b256 hash chain. |
+| **Public verifier** | Real. `/verify/<id>` reads the chain + Walrus with no wallet and recomputes all three checks. |
+| **Seal encryption** | Real via **MemWal mode** (`CAIRN_MEMORY=memwal`); default mode stores public blobs. |
+| **MCP server** | Real. Five tools over the same `@cairn/core` gate. |
+| **In-process memory index** | The one thing **not** persisted across server restarts — the local index is in-memory. Stated plainly rather than hidden. |
+
+## On the demo specifically
+
+<CardGroup cols={2}>
+  <Card title="Seed memories" icon="seedling">
+    Real Walrus testnet blobs, uploaded once with `apps/web/scripts/seed-walrus.mjs`. Resolvable on any testnet aggregator.
+  </Card>
+  <Card title="New captures" icon="upload">
+    Hit Walrus live and get a real blob id back.
+  </Card>
+  <Card title="Cross-model answers" icon="robot">
+    Live GPT-4o and Claude calls when keys are present.
+  </Card>
+  <Card title="The revoke" icon="ban">
+    A real policy change the gate honors before the model is invoked.
+  </Card>
+</CardGroup>
+
+<Note>
+The honesty here is the point. Cairn's whole pitch is provability — so the docs say exactly what's live, what's mock, and the single thing that doesn't persist, rather than pretend otherwise.
+</Note>

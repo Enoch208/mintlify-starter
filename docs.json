@@ -1,34 +1,81 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "Cairn",
+  "description": "Proof-carrying memory for AI agents — control what every agent can use, and prove it on every answer. Built on Sui · Walrus · Seal · MemWal.",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#2563EB",
+    "light": "#7DBCFF",
+    "dark": "#4DA2FF"
   },
   "favicon": "/favicon.svg",
   "navigation": {
-    "pages": [
+    "tabs": [
       {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": [
+              "index",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Core concepts",
+            "pages": [
+              "concepts/memory-and-namespaces",
+              "concepts/the-gate",
+              "concepts/answer-receipts",
+              "concepts/proofs-on-sui"
+            ]
+          },
+          {
+            "group": "On-chain (Sui)",
+            "pages": [
+              "onchain/contract",
+              "onchain/hash-chain",
+              "onchain/verifier",
+              "onchain/deployments"
+            ]
+          },
+          {
+            "group": "The Sui Stack",
+            "pages": [
+              "stack/walrus",
+              "stack/seal-memwal"
+            ]
+          },
+          {
+            "group": "Integrate",
+            "pages": [
+              "integrate/mcp",
+              "integrate/wallet",
+              "integrate/api-reference"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/honesty-table",
+              "reference/tech-stack"
+            ]
+          }
         ]
       }
     ],
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
+          "anchor": "Live demo",
+          "href": "https://cairn-livid-eight.vercel.app",
+          "icon": "play"
         },
         {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
+          "anchor": "GitHub",
+          "href": "https://github.com/Enoch208/cairn",
+          "icon": "github"
         }
       ]
     }
@@ -40,33 +87,19 @@
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "label": "GitHub",
+        "href": "https://github.com/Enoch208/cairn"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "label": "Live demo",
+      "href": "https://cairn-livid-eight.vercel.app"
     }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/Enoch208/cairn"
     }
   }
 }

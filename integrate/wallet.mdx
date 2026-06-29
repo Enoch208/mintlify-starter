@@ -1,0 +1,79 @@
+---
+title: "Wallet integration"
+description: "Connect a Sui wallet with dApp Kit to sign access changes and anchor proofs on-chain."
+---
+
+Cairn uses the official [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) for wallet connection. Users sign their own transactions — granting/revoking access and anchoring proofs — so the on-chain layer is genuinely user-owned, not custodial.
+
+## Providers
+
+The app wraps its routes in the dApp Kit providers (React Query → Sui client → Wallet):
+
+```tsx
+// apps/web/app/providers.tsx
+import { QueryClientProvider } from "@tanstack/react-query";
+import { SuiClientProvider, WalletProvider, createNetworkConfig } from "@mysten/dapp-kit";
+import { getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
+
+const { networkConfig } = createNetworkConfig({
+  testnet: { url: getJsonRpcFullnodeUrl("testnet"), network: "testnet" },
+});
+
+export function Providers({ children }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
+        <WalletProvider autoConnect>{children}</WalletProvider>
+      </SuiClientProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+<Note>
+`@mysten/sui` v2.20 moved the JSON-RPC client to the `@mysten/sui/jsonRpc` subpath (`SuiJsonRpcClient`, `getJsonRpcFullnodeUrl`). The old `@mysten/sui/client` exports were removed.
+</Note>
+
+## Signed actions
+
+<CardGroup cols={2}>
+  <Card title="Initialize a policy" icon="plus">
+    Connect → `create()` → you own a shared `AccessPolicy` and its `OwnerCap`.
+  </Card>
+  <Card title="Grant / revoke" icon="toggle-on">
+    The Access matrix signs `set_access(cap, policy, agent, namespace, allowed)`.
+  </Card>
+  <Card title="Anchor a proof" icon="cube">
+    The Dashboard signs `anchor_receipt(...)` to mint a `Receipt` object.
+  </Card>
+  <Card title="Verify" icon="shield-check">
+    Read-only — no wallet needed (see the verifier).
+  </Card>
+</CardGroup>
+
+## Anchoring, step by step
+
+Anchoring is a two-step flow: store to Walrus (server), then sign the mint (client).
+
+```tsx
+// 1. store the receipt to Walrus, get the canonical digest
+const { blobId, digestHex } = await anchorReceipt(receipt);
+
+// 2. sign the on-chain mint with the connected wallet
+const tx = anchorReceiptTx({
+  policy: CAIRN.policyId,
+  answerId: receipt.answerId,
+  agent: receipt.agentId,
+  used: receipt.usedMemories.map((m) => m.namespace),
+  blocked: receipt.blockedNamespaces,
+  digestHex,
+  walrusBlob: blobId,
+});
+const res = await signAndExecute({ transaction: tx });
+```
+
+After execution Cairn waits for the transaction and reads back the created `Receipt` object id — which becomes the shareable `/verify/<id>` link.
+
+## Transaction builders
+
+All on-chain calls go through typed builders in `apps/web/lib/sui.ts` — `createPolicyTx`, `setAccessTx`, `anchorReceiptTx` — with `tx.pure.string`, `tx.pure.vector("u8", ...)`, etc. The `digest` is passed as a `vector<u8>` so it matches the contract's signature exactly.

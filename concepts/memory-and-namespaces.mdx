@@ -1,0 +1,59 @@
+---
+title: "Memory & namespaces"
+description: "How Cairn stores facts as content-addressed Walrus blobs, organized into typed namespaces."
+---
+
+A **memory** in Cairn is a single fact an agent has learned, stored as a real, content-addressed blob on Walrus and tagged with a typed **namespace**.
+
+## The Memory contract
+
+```ts
+type Memory = {
+  memoryId: string;       // local id
+  namespace: NamespaceId; // "diet" | "health" | "project" | "billing"
+  content: string;        // the fact itself
+  sourceAgent: AgentId;   // who taught it
+  walrusRef: string;      // the REAL Walrus blob id
+  createdAt: string;
+};
+```
+
+The `walrusRef` is the heart of it: it's the actual blob id returned by Walrus when the fact is stored, not a placeholder. Anyone can resolve it on a Walrus aggregator and confirm the content exists.
+
+## Namespaces
+
+Namespaces are the unit of access control. Instead of "can this agent read memory?" Cairn asks "can this agent read the **health** namespace?". The default set:
+
+<CardGroup cols={2}>
+  <Card title="diet" icon="utensils">Food preferences, restrictions.</Card>
+  <Card title="health" icon="heart-pulse">Sensitive medical facts.</Card>
+  <Card title="project" icon="folder">Work and project context.</Card>
+  <Card title="billing" icon="credit-card">Payment and account details.</Card>
+</CardGroup>
+
+Namespaces make the policy legible: a person can look at an agent × namespace grid and understand exactly what each agent can touch.
+
+## Teaching a memory
+
+When Agent A captures a fact, Cairn writes it to Walrus and keeps the returned blob id as the memory's reference:
+
+```ts
+// apps/web/lib/store.ts (simplified)
+const { blobId } = await walrus.store(
+  { namespace, content, sourceAgent, createdAt },
+  MEMORY_EPOCHS,
+);
+const memory = { memoryId, walrusRef: blobId, namespace, content, sourceAgent, createdAt };
+```
+
+<Tip>
+In **MemWal mode**, the write instead routes through the MemWal relayer, which Seal-encrypts the content server-side before it lands on Walrus — so the memory is private, addressed by a real blob but readable only through the relayer. See [Seal & MemWal](/stack/seal-memwal).
+</Tip>
+
+## Why content-addressing matters
+
+Because each memory is addressed by the hash of its content, a memory can't be silently swapped. The Answer Receipt records the `walrusRef` of every memory used, and the verifier re-resolves it — so "the agent used this exact fact" becomes something you can check, not something you assume.
+
+<Note>
+The three seed memories in the demo aren't fixtures — they're real Walrus testnet blobs uploaded once with `apps/web/scripts/seed-walrus.mjs`. You can resolve them on any testnet aggregator.
+</Note>

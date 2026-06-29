@@ -1,0 +1,84 @@
+---
+title: "The hash chain"
+description: "How blake2b256 binds each receipt to its content and to the receipts before it — and why TS and Move agree byte-for-byte."
+---
+
+Cairn's proofs are tamper-evident because of two hashes computed with **BLAKE2b-256**: a content-binding `digest` and a chaining `chain_digest`.
+
+## Two hashes, two guarantees
+
+<CardGroup cols={2}>
+  <Card title="digest — content binding" icon="fingerprint">
+    `blake2b256` of the exact Walrus receipt blob. Proves the on-chain proof points to specific content.
+  </Card>
+  <Card title="chain_digest — tamper evidence" icon="link">
+    `blake2b256(prev_digest ++ digest)`. Links each receipt to its predecessor, so reordering or deleting a receipt breaks the chain.
+  </Card>
+</CardGroup>
+
+## The fixed byte layout
+
+Both sides agree on an exact byte layout — this is what makes cross-implementation verification possible:
+
+```
+chain_digest = blake2b256( prev_digest_bytes ++ digest_bytes )
+```
+
+- `prev` first, then `digest`, **no separator**.
+- An empty `prev` (the first receipt) hashes the `digest` bytes alone.
+
+```move
+// Move (contract)
+let prev = policy.chain_head;
+let mut buf = prev;
+vector::append(&mut buf, digest);
+let chain_digest = hash::blake2b256(&buf);
+```
+
+```ts
+// TypeScript (verifier + app)
+export function chainDigestHex(prevHex, digestHexValue) {
+  const prev = prevHex ? hexToBytes(prevHex) : new Uint8Array(0);
+  const dig = hexToBytes(digestHexValue);
+  const buf = new Uint8Array(prev.length + dig.length);
+  buf.set(prev, 0);
+  buf.set(dig, prev.length);
+  return digestHex(buf); // blake2b256 -> lowercase hex
+}
+```
+
+## Content binding via canonical JSON
+
+The `digest` is the hash of the receipt's **canonical** form — keys sorted recursively — so it's reproducible regardless of how Walrus serialized the stored JSON:
+
+```ts
+function sortValue(v) {
+  if (Array.isArray(v)) return v.map(sortValue);
+  if (v && typeof v === "object")
+    return Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortValue(v[k])]));
+  return v;
+}
+const canonicalReceiptBytes = (r) => new TextEncoder().encode(JSON.stringify(sortValue(r)));
+const digestHex = (bytes) => bytesToHex(blake2b(bytes, { dkLen: 32 }));
+```
+
+<Tip>
+The verifier re-canonicalizes the fetched blob before hashing, so the check is robust to key order and whitespace introduced in storage. The proof binds the **content**, not the exact bytes.
+</Tip>
+
+## Cross-implementation agreement
+
+The TypeScript verifier and the Move contract must produce **identical** hashes or honest proofs would fail to verify. This is pinned by a golden test vector on both sides:
+
+```
+blake2b256("abc") = bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319
+```
+
+- TypeScript: `@noble/hashes` `blake2b(bytes, { dkLen: 32 })`.
+- Move: `sui::hash::blake2b256(&bytes)`.
+
+Both are asserted against the same constant in their test suites — so any drift fails CI, not a user's verification.
+
+<Note>
+`@noble/hashes` v2 exposes blake2b at the `@noble/hashes/blake2.js` subpath, and `@mysten/sui` v2.20 exposes the JSON-RPC client at `@mysten/sui/jsonRpc` — both are used by the verifier.
+</Note>

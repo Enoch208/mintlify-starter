@@ -1,0 +1,60 @@
+---
+title: "MCP server"
+description: "Give any MCP client — Cursor, Claude Desktop, Claude Code — gated, receipted, Walrus-backed memory."
+---
+
+Cairn's gate and receipts aren't locked inside the demo UI. The `@cairn/mcp` package is a [Model Context Protocol](https://modelcontextprotocol.io) server, so **any** MCP client gets gated, receipted, Walrus-verified memory that persists across sessions.
+
+<Info>
+The proof travels with the answer, not the vendor — the same gated memory works in Cursor, Claude Desktop, and Claude Code.
+</Info>
+
+## The tools
+
+The server (`name: "cairn"`) registers five tools:
+
+| Tool | What it does |
+| --- | --- |
+| `cairn_remember` | Capture a fact into a typed namespace (stored on Walrus). |
+| `cairn_recall` | Retrieve memory for a query — **gated** by the agent × namespace policy. |
+| `cairn_set_access` | Grant or revoke an agent's access to a namespace. |
+| `cairn_list_memories` | List stored memories. |
+| `cairn_policy` | Inspect the current access policy. |
+
+Every `cairn_recall` runs the same gate as the web app: blocked namespaces are never returned, and the result carries the same receipt semantics.
+
+## Install
+
+<Steps>
+  <Step title="Build the package">
+    ```bash
+    cd cairn
+    npm install
+    npm run build -w @cairn/mcp
+    ```
+  </Step>
+  <Step title="Register with your MCP client">
+    Point your client at the server's entry. For Claude Desktop, add it to your MCP config:
+    ```json
+    {
+      "mcpServers": {
+        "cairn": {
+          "command": "node",
+          "args": ["/absolute/path/to/cairn/packages/cairn-mcp/dist/index.js"]
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Use it">
+    Ask your agent to remember and recall facts — every recall is gated, and access can be changed on the fly with `cairn_set_access`.
+  </Step>
+</Steps>
+
+## Storage
+
+The MCP server persists to a local store (default `~/.cairn/store.json`, override with `CAIRN_STORE`) and uses the same Walrus + policy primitives as the web app — so a memory taught through Cursor can be recalled through Claude Desktop, gated the same way.
+
+<Tip>
+Because the gate and receipt logic live in the framework-free `@cairn/core` package, the web app and the MCP server share **exactly** the same enforcement — there's no second, weaker code path.
+</Tip>

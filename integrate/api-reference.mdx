@@ -1,0 +1,98 @@
+---
+title: "API reference"
+description: "The Cairn web app's HTTP routes — chat (gated), capture, policy, anchor, and reset."
+---
+
+The Next.js app exposes a small set of routes under `/api`. The gate runs server-side in these handlers, before any model is called.
+
+## POST /api/chat
+
+Gate, generate, and return an answer with its receipt.
+
+```jsonc
+// request
+{ "agentId": "agent-b", "query": "Am I allergic to anything?", "policyId": "0x527d…" }
+```
+
+```jsonc
+// response
+{
+  "answer": "You're allergic to penicillin.",
+  "receipt": {
+    "answerId": "ans-…",
+    "agentId": "agent-b",
+    "usedMemories": [
+      { "namespace": "health", "snippet": "Allergic to penicillin",
+        "walrusRef": "oHJR…", "authorized": true, "verified": true }
+    ],
+    "blockedNamespaces": [],
+    "createdAt": "2026-…"
+  }
+}
+```
+
+<Note>
+`policyId` is optional. When present, the allow-list is read from the **on-chain** policy via `devInspect`; when absent, the in-process policy is used (mock-first fallback). Either way, blocked memory never reaches the model.
+</Note>
+
+## POST /api/memories
+
+Capture a fact to Walrus.
+
+```jsonc
+// request
+{ "namespace": "health", "content": "Allergic to penicillin", "sourceAgent": "agent-a" }
+// response
+{ "memory": { "memoryId": "m…", "walrusRef": "…", "namespace": "health", ... } }
+```
+
+## GET /api/memories
+
+List all stored memories: `{ "memories": Memory[] }`.
+
+## GET /api/policy · POST /api/policy
+
+Read or update the in-process policy mirror.
+
+```jsonc
+// POST request
+{ "agentId": "agent-b", "namespace": "health", "allowed": false }
+// response
+{ "policy": { "agent-b": { "health": false, ... }, ... } }
+```
+
+## POST /api/anchor
+
+Store the canonical receipt to Walrus and return its blob id + content digest. The on-chain mint is then signed client-side.
+
+```jsonc
+// request
+{ "receipt": { /* AnswerReceipt */ } }
+// response
+{ "blobId": "…", "digestHex": "2a12…", "verified": true }
+```
+
+<Tip>
+`digestHex` is `blake2b256` over the **canonical** receipt bytes. The verifier re-derives the same digest from the stored blob — see [The hash chain](/onchain/hash-chain).
+</Tip>
+
+## POST /api/reset
+
+Reset the demo to seed state (seed memories + default policy). Useful before a recording or a fresh walkthrough.
+
+```jsonc
+{ "ok": true }
+```
+
+## Typed client
+
+A thin client wraps these in `apps/web/lib/api.ts`:
+
+```ts
+sendChat(agentId, query, policyId?) // POST /api/chat
+capture({ namespace, content, sourceAgent }) // POST /api/memories
+getMemories() // GET /api/memories
+getPolicy() / setAccess(agentId, namespace, allowed) // /api/policy
+anchorReceipt(receipt) // POST /api/anchor -> { blobId, digestHex, verified }
+resetDemo() // POST /api/reset
+```

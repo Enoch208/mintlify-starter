@@ -1,47 +1,101 @@
 ---
 title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+description: "Run Cairn locally — from clone to a live, proof-carrying agent in a few minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+This guide takes you from zero to a running Cairn: teach a fact, recall it across models, watch the gate block a revoked namespace, and verify a proof on-chain.
 
 ## Prerequisites
 
-Before you begin, you must have:
+<CardGroup cols={2}>
+  <Card title="Node.js 20+" icon="node-js">
+    The app is a Next.js 16 monorepo using npm workspaces.
+  </Card>
+  <Card title="Sui CLI (optional)" icon="terminal">
+    Only needed to build/publish the Move contract yourself.
+  </Card>
+</CardGroup>
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
+<Note>
+Cairn is **mock-first**: real OpenAI / Anthropic / Walrus adapters sit behind interfaces, and the system falls back to deterministic mocks when a key is absent — so it runs offline and a demo never hard-fails on a flaky testnet.
+</Note>
 
-## Get started
+## 1. Clone and install
+
+```bash
+git clone https://github.com/Enoch208/cairn
+cd cairn
+npm install
+```
+
+## 2. Configure environment
+
+Copy the example env and fill in what you have. With **no keys**, Cairn runs in mock mode; with keys, it runs live.
+
+```bash
+cp apps/web/.env.example apps/web/.env.local
+```
+
+<CodeGroup>
+```bash Live mode
+# apps/web/.env.local
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+WALRUS_PUBLISHER=https://publisher.walrus-testnet.walrus.space
+WALRUS_AGGREGATOR=https://aggregator.walrus-testnet.walrus.space
+CAIRN_MODE=live
+```
+
+```bash Mock mode
+# apps/web/.env.local
+CAIRN_MODE=mock
+# no API keys needed — deterministic stubs for LLM + Walrus
+```
+</CodeGroup>
+
+<Tip>
+The on-chain config (package + policy IDs) is read from `deployments/testnet.json`, so you don't need to set it manually to use the public verifier.
+</Tip>
+
+## 3. Run the app
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## 4. The five-minute tour
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
-
-    ```bash
-    npm install your-package
-    ```
+  <Step title="Teach a fact">
+    Open **Chat A** (GPT-4o). Use the capture box to store a fact in the `health` namespace — e.g. _"Allergic to penicillin."_ It's written to Walrus as a real blob.
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
-
-    ```bash
-    your-cli init
-    ```
+  <Step title="Recall across models">
+    Open **Chat B** (Claude). Ask _"Am I allergic to anything?"_ Agent B — a different provider — recalls the fact and renders an **Answer Receipt** showing the memory used, that it was authorized, and that the blob still resolves on Walrus.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
-
-    ```bash
-    your-cli start
-    ```
+  <Step title="Revoke and watch the gate">
+    Open **Access** and revoke Agent B's access to `health`. Ask again — the agent truthfully refuses, and the receipt shows `health blocked by policy`. The gate ran **before** the model, so the memory was never fetched.
+  </Step>
+  <Step title="Anchor and verify">
+    On the **Dashboard**, anchor the latest receipt on-chain (one wallet signature). Open `/verify/<objectId>` — with no wallet — and watch Cairn independently confirm the proof against Sui and Walrus.
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## 5. Run the tests
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+```bash
+npm test                      # TypeScript: core gate, receipts, digest, verify
+cd contracts && sui move test # Move: receipt minting, hash chain, blake2b256
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    See how the gate, Walrus, and on-chain proof fit together.
+  </Card>
+  <Card title="Use it from any agent" icon="plug" href="/integrate/mcp">
+    Wire Cairn into Cursor, Claude Desktop, or Claude Code via MCP.
+  </Card>
+</CardGroup>
